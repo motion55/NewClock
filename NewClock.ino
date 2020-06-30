@@ -46,7 +46,7 @@ const char *ap_password = "bst142857";
 
 ///////////////////////////////////////////////////////////////////
 
-const int numDevices = 4;      // number of MAX7219s used
+const int numDevices = 8;      // number of MAX7219s used
 const int SPI_CS = 15;
 const int SPI_MOSI = 13;
 const int SPI_CLK = 14;
