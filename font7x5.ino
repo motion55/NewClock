@@ -795,7 +795,7 @@ const int font7x5_offset[] = {
 	487,493,499,505,509,511,515,521,
 };
 
-MAX7219Control lc = MAX7219Control(SPI_MOSI, SPI_CLK, SPI_CS, numDevices);
+MAX7219Control lc = MAX7219Control(_SPI_MOSI, _SPI_CLK, _SPI_CS, numDevices);
 
 void InitMax7219() 
 {
@@ -807,17 +807,17 @@ void InitMax7219()
 	}
 }
 
-const int ColumnBufferLen = 512;
-unsigned char ColumnBuffer[ColumnBufferLen];
-int LoadPos = 0;
+const int ColumnBuftLen = 512;
+unsigned char ColumnBuffer[ColumnBuftLen];
+int LoadPos = ScrollBeginPos;
 
 void ResetColumnBuffer()
 {
-	for (int col = 0; col < ColumnBufferLen; col++)
-	{
-		ColumnBuffer[col] = 0;
-	}
-	LoadPos = 0;
+//	for (int col = ScrollBeginPos; col < ColumnBuftLen; col++)
+//	{
+		//ColumnBuffer[col] = 0;
+//	}
+	LoadPos = ScrollBeginPos;
 }
 
 char LoadColumnBuffer(char ascii)
@@ -833,12 +833,12 @@ char LoadColumnBuffer(char ascii)
 #endif
 
 #if defined(ESP8266)
-		if ((LoadPos + kern) > ColumnBufferLen) kern = ColumnBufferLen - LoadPos;
+		if ((LoadPos + kern) > ColumnBuftLen) kern = ColumnBuftLen - LoadPos;
 		memcpy_P(&ColumnBuffer[LoadPos], font7x5 + offset, kern);
 #else
 		for (int i = 0; i < kern; i++)
 		{
-			if (LoadPos >= ColumnBufferLen) return i;
+			if (LoadPos >= ColumnBuftLen) return i;
 			ColumnBuffer[LoadPos++] = pgm_read_byte_near(font7x5 + offset);
 			offset++;
 		}
@@ -903,7 +903,7 @@ int LoadDisplayBuffer(int BufferLen)
 			for (int col = 0; col < 8; col++)
 			{
 				dat <<= 1;
-				if (Pos >= BufferLen) Pos = 0;
+				if (Pos >= BufferLen) Pos = ScrollBeginPos;
 				if (mask & ColumnBuffer[Pos++])
 				{
 					dat += 1;
@@ -915,8 +915,7 @@ int LoadDisplayBuffer(int BufferLen)
 		lc.setRow(row, RowBuffer);
 	}
 	ScrollPos++;
-	if (ScrollPos >= BufferLen) ScrollPos = 0;
+	if (ScrollPos >= BufferLen) ScrollPos = ScrollBeginPos;
 
 	return ScrollPos;
 }
-

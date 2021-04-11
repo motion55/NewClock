@@ -5,8 +5,15 @@
 #include <avr/pgmspace.h>
 #endif
 
+#define _USE_BMP280_  0
+#define _USE_DS3231_  0
+
+#define _DEBUG_NTP_   1 
+
+#if _USE_BMP280_
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
+#endif
 
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
@@ -14,6 +21,7 @@
 #include <Time.h>
 #include <TimeLib.h>
 
+#if _USE_BMP280_
 Adafruit_BMP280 bme; // I2C
 boolean Use_bmp280;
 String bmp280_str;
@@ -22,14 +30,15 @@ int T_samples, P_samples;
 float Ave_Temperature, Ave_Pressure;
 int Count = 0;
 #define	AVE_SAMPLES	128
+#endif
 
 String sta_ssid("BST");  //  your network SSID (name)
 String sta_pass;            // your network password
 
 unsigned int localPort = 2390;      // local port to listen for UDP packets
 
-const char* ntpServerName = "ntp.pagasa.dost.gov.ph";
-IPAddress timeServerIP(121, 58, 193, 100);	//IP address of "ntp.pagasa.dost.gov.ph"
+const char *ntpServerName = "pool.ntp.org"; //"ntp.pagasa.dost.gov.ph";
+IPAddress timeServerIP(192, 168, 7, 1);     // IP address of
 
 const int NTP_PACKET_SIZE = 48;	// NTP time stamp is in the first 48 bytes of the message
 
@@ -41,18 +50,17 @@ WiFiUDP udp;
 
 
 // Access point credentials
-const char *ap_ssid = "OLEDClock";
-const char *ap_password = "bst142857";
+const char *ap_ssid = "MatrixClock";
+const char *ap_password = "12345678";
 
 ///////////////////////////////////////////////////////////////////
 
 const int numDevices = 8;      // number of MAX7219s used
-const int SPI_CS = 15;
-const int SPI_MOSI = 13;
-const int SPI_CLK = 14;
+const int _SPI_CS = 15;     //D8
+const int _SPI_MOSI = 13;   //D7
+const int _SPI_CLK = 14;    //D5;
 
-char scrollText[] = "00:00:00am \0";
-//                   01234567890
+#define ScrollBeginPos  32
 
 extern int LoadPos;
 
@@ -63,20 +71,27 @@ void ResetScrollPos(void);
 int LoadDisplayBuffer(int BufferLen);
 void sendNTPpacket(IPAddress& address);
 
+#if _USE_BMP280_
 void LoadDisplayBMP280(void);
+#endif
 
 void setup(void) {
+  InitMax7219();
+
 	Serial.begin(115200);
 
-  IPAddress local_IP(192,168,8,1);
-  IPAddress gateway(192,168,8,1);
+  IPAddress local_IP(192,168,25,1);
+  IPAddress gateway(192,168,25,1);
   IPAddress subnet(255,255,255,0);
 
   WiFi.softAPConfig(local_IP, gateway, subnet);
   WiFi.softAP(ap_ssid,ap_password); 
   
+#if _USE_DS3231_
 	DS3231_setup();
+#endif 
 
+#if _USE_BMP280_
 	if (!bme.begin(0x76))
 	{
 		Serial.println("Could not find a valid BMP280 sensor, check wiring!");
@@ -95,13 +110,10 @@ void setup(void) {
 		Count = 0;
 		Use_bmp280 = true;
 	}
-
+#endif
   delay(3000);
 
-  InitMax7219();
-
   String ConnectStr("Connecting... ");
-
   ResetScrollPos();
   int Len = LoadMessage(ConnectStr.c_str());
   for (int i=0; i<200; i++)
@@ -120,7 +132,6 @@ void setup(void) {
   InitMax7219();
 
   ResetScrollPos();
-
 
 	for (int i = 0; i<400; i++)
 	{
@@ -154,39 +165,43 @@ char TimeText[] = "00:00:00am\0";
 //                 01234567890
 
 int LogoCount = 0;
-int BufferEnd = 0;
+int BufferEnd = ScrollBeginPos;
 
 void loop(void) {
 	UpdateTime();
 
-  if (LoadDisplayBuffer(BufferEnd) == 0) {
+  if (LoadDisplayBuffer(BufferEnd) == ScrollBeginPos) {
     if (LogoOn())
     {
       LogoCount++;
       if (LogoCount > 5) {
         LogoCount = 0;
         SetLogo(false);
-        String Timestr(scrollText);
+        String Timestr(TimeText);
+        Timestr += " ";
         Timestr += GetDateStr();
         BufferEnd = LoadMessage(Timestr.c_str());
       } else
       if (LogoCount == 3) {
         SetLogo(false);
         LoadDisplayBMP280();
-        String Timestr(scrollText);
+        String Timestr(TimeText);
+#if _USE_BMP280_
+        Timestr += " ";
         Timestr += bmp280_str;
+#endif
         BufferEnd = LoadMessage(Timestr.c_str());
       } else {
-        BufferEnd = LoadMessage(scrollText);
+        BufferEnd = LoadMessage(TimeText);
       }
     }
     else
     {
       SetLogo(true);
-      BufferEnd = LoadMessage(scrollText);
+      BufferEnd = LoadMessage(TimeText);
     }
   } else  {
-    
+#if _USE_BMP280_
     if (Use_bmp280)
     {
       Ave_Temperature = Temperature / AVE_SAMPLES;
@@ -197,10 +212,11 @@ void loop(void) {
       Pressure -= Ave_Pressure;
       Pressure += bme.readPressure();
     }
-
-    ReloadMessage(0, scrollText);
+#endif
+    ReloadMessage(ScrollBeginPos, TimeText);
   }
- 
+
+  webserver_loop();
 
 	my_delay_ms(50);
 }
@@ -216,46 +232,144 @@ String GetDateStr(void)
   return DateStr;
 }
 
+#if (ScrollBeginPos>0)    
+const unsigned char NumFont[] PROGMEM = {
+  // 0
+  0b00111110,
+  0b01000001,
+  0b00111110,
+  // 1
+  0b00000000,
+  0b01111111,
+  0b00000000,
+  // 2
+  0b01110010,
+  0b01001001,
+  0b01010110,
+  // 3
+  0b01001001,
+  0b01001001,
+  0b00110110,
+  // 4
+  0b00001111,
+  0b00001000,
+  0b01111111,
+  // 5
+  0b01001111,
+  0b01001001,
+  0b00110001,
+  // 6
+  0b00111110,
+  0b01001001,
+  0b00110010,
+  // 7
+  0b01100011,
+  0b00011001,
+  0b00000111,
+  // 8
+  0b00110110,
+  0b01001001,
+  0b00110110,
+  // 9
+  0b01000110,
+  0b01001001,
+  0b00111110,
+};
+#endif
+
+extern unsigned char ColumnBuffer[];
+
 void UpdateTime(void)
 {
   time_t tm = now();
 
-  int hour = hourFormat12(tm);
-  if (hour < 10)
+  int hrs = hourFormat12(tm);
+  if (hrs < 10)
   {
-    scrollText[0] = ' ';
-    scrollText[1] = '0' + hour;
+    TimeText[0] = ' ';
+#if (ScrollBeginPos>0)    
+    ColumnBuffer[0] = 0;
+#endif    
   }
   else
   {
-    scrollText[0] = '1';
-    scrollText[1] = '0' + (hour-10);
+    hrs -= 10;
+    TimeText[0] = '1';
+#if (ScrollBeginPos>0)    
+    ColumnBuffer[0] = 0b01111111;
+#endif  
   }
+#if (ScrollBeginPos>0)    
+  ColumnBuffer[1]= 0;
+#endif  
+  
+  TimeText[1] = '0' + hrs;
+#if (ScrollBeginPos>0)    
+  hrs *= 3;
+  
+  memcpy_P(&ColumnBuffer[2], NumFont + hrs, 3);
+  ColumnBuffer[5] = 0;
 
-  int min = minute(tm);
-  int min10 = min / 10;
-  scrollText[3] = '0' + min10;
-  scrollText[4] = '0' + min - (min10 * 10);
+  ColumnBuffer[6] = 0b00110110;
+  ColumnBuffer[7] = 0;
+#endif  
+  
+  int mins = minute(tm);
+  int min10 = mins / 10;
+  mins = mins % 10;
+  
+  TimeText[3] = '0' + min10;
+#if (ScrollBeginPos>0)    
+  min10 *= 3;
+  memcpy_P(&ColumnBuffer[8], NumFont + min10, 3);
+  ColumnBuffer[11] = 0;
+#endif  
+  
+  TimeText[4] = '0' + mins;
+#if (ScrollBeginPos>0)    
+  mins *= 3;
+  memcpy_P(&ColumnBuffer[12], NumFont + mins, 3);
+  ColumnBuffer[15] = 0;
+  
+  ColumnBuffer[16] = 0b00110110;
+  ColumnBuffer[17] = 0;
+#endif  
 
   int sec = second(tm);
   int sec10 = sec / 10;
-  scrollText[6] = '0' + sec10;
-  scrollText[7] = '0' + sec - (sec10 * 10);
+  sec = sec % 10;
+  
+  TimeText[6] = '0' + sec10;
+#if (ScrollBeginPos>0)    
+  sec10 *= 3;
+  memcpy_P(&ColumnBuffer[18], NumFont + sec10, 3);
+  ColumnBuffer[21] = 0;
+#endif  
+  
+  TimeText[7] = '0' + sec;
+#if (ScrollBeginPos>0)    
+  sec *= 3;
+  memcpy_P(&ColumnBuffer[22], NumFont + sec, 3);
+  ColumnBuffer[25] = 0;
+#endif  
 
   if (isAM(tm))
   {
-    scrollText[8] = 'a';
-    scrollText[9] = 'm';
+    TimeText[8] = 'a';
+    TimeText[9] = 'm';
   }
   else
   {
-    scrollText[8] = 'p';
-    scrollText[9] = 'm';
+    TimeText[8] = 'p';
+    TimeText[9] = 'm';
   }
 }
 
 const int timeZone = 8 * SECS_PER_HOUR;     // PHT
-int packet_delay = 0;
+#define MAX_PACKET_DELAY 1500
+uint32_t send_Timestamp;
+uint32_t packet_delay = 1500;
+
 
 // send an NTP request to the time server at the given address
 void sendNTPpacket(IPAddress& address)
@@ -277,22 +391,29 @@ void sendNTPpacket(IPAddress& address)
 		packetBuffer[14] = 49;
 		packetBuffer[15] = 52;
 
+    send_Timestamp = millis();
+    packet_delay = 1500;
+    
 		// all NTP fields have been given values, now
 		// you can send a packet requesting a timestamp:
 		udp.beginPacket(address, 123); //NTP requests are to port 123
 		udp.write(packetBuffer, NTP_PACKET_SIZE);
 		udp.endPacket();
-
-		packet_delay = 1500;		 // wait to see if a reply is available
 	}
 }
 
-time_t getNtpTime()
-{
-	Serial.println(F("Transmit NTP Request"));
-	sendNTPpacket(timeServerIP); // send an NTP packet to a time server
+time_t getNtpTime() {
+  IPAddress addr;
+  if (WiFi.hostByName(ntpServerName, addr)) {
+    timeServerIP = addr;
+  }
+#if _DEBUG_NTP_
+  Serial.println(F("Transmit NTP Request"));
+#endif
+  sendNTPpacket(timeServerIP); // send an NTP packet to a time server
+  setSyncInterval(300);        // retry after 5 minutes
 
-	return 0;
+  return 0;
 }
 
 void my_delay_ms(int msec)
@@ -302,11 +423,10 @@ void my_delay_ms(int msec)
 	uint32_t beginWait = endWait;
 	while (endWait - beginWait < delay_val)
 	{
-		webserver_loop();
-
-		int size = udp.parsePacket();
-		if (packet_delay > 0)
+    if ((endWait - send_Timestamp) < packet_delay)
 		{
+      int size = udp.parsePacket();
+      
 			if (size >= NTP_PACKET_SIZE)
 			{
 				Serial.println(F("Receive NTP Response"));
@@ -318,22 +438,37 @@ void my_delay_ms(int msec)
 				secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
 				secsSince1900 |= (unsigned long)packetBuffer[43];
 
+        uint32_t pingTime = (endWait - send_Timestamp) / 2;
+  #ifdef _DEBUG_NTP_
+        Serial.print("receive time = ");
+        Serial.println(pingTime);
+  #endif
+        uint32_t frac_sec = (unsigned long)packetBuffer[44] << 8;
+        frac_sec += (unsigned long)packetBuffer[45];
+        frac_sec *= 1000;
+        frac_sec /= 65536;
+        frac_sec += pingTime;
+
+        if (frac_sec >= 500)
+          secsSince1900 += 1;
+
 				time_t tm = secsSince1900 - 2208988800UL + timeZone;
+        
 				setTime(tm);
+#if _USE_DS3231_
 				DS3231_setTime(tm);
-				packet_delay = 0;
+#endif
+        packet_delay = 0;
 			}
 		}
 		delay(1);
 		endWait = millis();
 	}
-	if (packet_delay > 0)
-		packet_delay -= msec;
-
 }
 
 void LoadDisplayBMP280(void)
 {
+#if _USE_BMP280_
   if (Use_bmp280)
   {
     if (T_samples > 0)
@@ -363,4 +498,5 @@ void LoadDisplayBMP280(void)
   {
     bmp280_str = String(" No BMP280 detected! ");
   }
+#endif
 }

@@ -81,10 +81,10 @@ void wlanPageHandler()
 				break;
 			}
 			LoadDisplayBuffer(Len);
-			delay(50);
+			my_delay_ms(50);
 		}
 		ResetScrollPos();
-		delay(1000);
+		my_delay_ms(1000);
 		webserver_setup();
 	}
 
@@ -226,4 +226,3 @@ void handleNotFound()
 
 	server.send(404, "text/plain", message);
 }
-
