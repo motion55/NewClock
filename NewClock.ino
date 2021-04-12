@@ -174,7 +174,10 @@ void loop(void) {
 	UpdateTime();
 
   if (LoadDisplayBuffer(BufferEnd) == ScrollBeginPos) {
-    String Timestr(GetDateStr());
+    String Timestr(TimeText);
+    Timestr += " ";
+    Timestr += GetDateStr();
+    
     if (LogoOn())
     {
       LogoCount++;
@@ -210,7 +213,7 @@ void loop(void) {
       Pressure += bme.readPressure();
     }
 #endif
-    //ReloadMessage(ScrollBeginPos, TimeText);
+    ReloadMessage(ScrollBeginPos, TimeText);
   }
 
   webserver_loop();
@@ -242,9 +245,9 @@ const unsigned char NumFont[] PROGMEM = {
   0b00111110,
   // 1
   0b00000000,
-  0b00000010,
+  0b01000010,
   0b01111111,
-  0b00000000,
+  0b01000000,
   // 2
   0b01110010,
   0b01001001,
@@ -271,10 +274,10 @@ const unsigned char NumFont[] PROGMEM = {
   0b01001001,
   0b00110010,
   // 7
-  0b01000001,
-  0b00100001,
-  0b00010001,
-  0b00001111,
+  0b00000001,
+  0b01110001,
+  0b00001001,
+  0b00000111,
   // 8
   0b00110110,
   0b01001001,
@@ -345,20 +348,19 @@ void UpdateTime(void)
 #if (ScrollBeginPos>0)    
     ColumnBuffer[0] = 0;
     ColumnBuffer[1] = 0;
-#endif    
+    ColumnBuffer[2] = 0;
+#endif  
   }
   else
   {
     hrs -= 10;
     TimeText[0] = '1';
 #if (ScrollBeginPos>0)    
-    ColumnBuffer[1] = 0b00000010;
+    ColumnBuffer[0] = 0b01000010;
     ColumnBuffer[1] = 0b01111111;
+    ColumnBuffer[2] = 0b01000000;
 #endif  
   }
-#if (ScrollBeginPos>0)    
-  ColumnBuffer[2]= 0;
-#endif  
   
   TimeText[1] = '0' + hrs;
 #if (ScrollBeginPos>0)    
