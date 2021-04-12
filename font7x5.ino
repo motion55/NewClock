@@ -811,12 +811,20 @@ const int ColumnBuftLen = 512;
 unsigned char ColumnBuffer[ColumnBuftLen];
 int LoadPos = ScrollBeginPos;
 
+void InitColumnBuffer()
+{
+  for (int col = 0; col < ColumnBuftLen; col++)
+  {
+    ColumnBuffer[col] = 0;
+  }
+}
+
 void ResetColumnBuffer()
 {
-//	for (int col = ScrollBeginPos; col < ColumnBuftLen; col++)
-//	{
-		//ColumnBuffer[col] = 0;
-//	}
+	for (int col = ScrollBeginPos; col < ColumnBuftLen; col++)
+	{
+    ColumnBuffer[col] = 0;
+	}
 	LoadPos = ScrollBeginPos;
 }
 
@@ -894,22 +902,23 @@ int LoadDisplayBuffer(int BufferLen)
 	for (int row = 0; row < 8; row++)
 	{
 		unsigned char RowBuffer[numDevices];
-		int Pos = ScrollPos;
-		unsigned char dat = 0;
+		int Pos = 0;
 
-		for (int device = numDevices - 1; device >= 0; device--)
+		for (int device = 0; device < numDevices; device++)
 		{
-			unsigned char dat = 0;
+      unsigned char dat = 0;
+      
 			for (int col = 0; col < 8; col++)
 			{
-				dat <<= 1;
+        if (Pos == ScrollBeginPos) Pos = ScrollPos;
 				if (Pos >= BufferLen) Pos = ScrollBeginPos;
+        dat <<= 1;
 				if (mask & ColumnBuffer[Pos++])
 				{
 					dat += 1;
 				}
-				RowBuffer[device] = dat;
 			}
+      RowBuffer[(numDevices-1)-device] = dat;
 		}
 		mask <<= 1;
 		lc.setRow(row, RowBuffer);

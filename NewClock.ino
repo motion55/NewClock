@@ -112,6 +112,9 @@ void setup(void) {
 	}
 #endif
   delay(3000);
+  
+  InitColumnBuffer();
+  LoadDisplayBuffer(ScrollBeginPos);
 
   String ConnectStr("Connecting... ");
   ResetScrollPos();
@@ -171,35 +174,29 @@ void loop(void) {
 	UpdateTime();
 
   if (LoadDisplayBuffer(BufferEnd) == ScrollBeginPos) {
+    String Timestr(GetDateStr());
     if (LogoOn())
     {
       LogoCount++;
       if (LogoCount > 5) {
         LogoCount = 0;
         SetLogo(false);
-        String Timestr(TimeText);
-        Timestr += " ";
-        Timestr += GetDateStr();
-        BufferEnd = LoadMessage(Timestr.c_str());
       } else
       if (LogoCount == 3) {
         SetLogo(false);
-        LoadDisplayBMP280();
-        String Timestr(TimeText);
 #if _USE_BMP280_
+        LoadDisplayBMP280();
         Timestr += " ";
         Timestr += bmp280_str;
 #endif
-        BufferEnd = LoadMessage(Timestr.c_str());
       } else {
-        BufferEnd = LoadMessage(TimeText);
       }
     }
     else
     {
       SetLogo(true);
-      BufferEnd = LoadMessage(TimeText);
     }
+    BufferEnd = LoadMessage(Timestr.c_str());
   } else  {
 #if _USE_BMP280_
     if (Use_bmp280)
@@ -213,7 +210,7 @@ void loop(void) {
       Pressure += bme.readPressure();
     }
 #endif
-    ReloadMessage(ScrollBeginPos, TimeText);
+    //ReloadMessage(ScrollBeginPos, TimeText);
   }
 
   webserver_loop();
@@ -233,6 +230,63 @@ String GetDateStr(void)
 }
 
 #if (ScrollBeginPos>0)    
+
+#define NumWidth  4
+
+  #if (NumWidth==4)
+const unsigned char NumFont[] PROGMEM = {
+  // 0
+  0b00111110,
+  0b01000001,
+  0b01000001,
+  0b00111110,
+  // 1
+  0b00000000,
+  0b00000010,
+  0b01111111,
+  0b00000000,
+  // 2
+  0b01110010,
+  0b01001001,
+  0b01001001,
+  0b01000110,
+  // 3
+  0b01001001,
+  0b01001001,
+  0b01001001,
+  0b00110110,
+  // 4
+  0b00001111,
+  0b00001000,
+  0b00001000,
+  0b01111111,
+  // 5
+  0b01001111,
+  0b01001001,
+  0b01001001,
+  0b00110001,
+  // 6
+  0b00111110,
+  0b01001001,
+  0b01001001,
+  0b00110010,
+  // 7
+  0b01000001,
+  0b00100001,
+  0b00010001,
+  0b00001111,
+  // 8
+  0b00110110,
+  0b01001001,
+  0b01001001,
+  0b00110110,
+  // 9
+  0b00100110,
+  0b01001001,
+  0b01001001,
+  0b00111110,
+};
+  #else
 const unsigned char NumFont[] PROGMEM = {
   // 0
   0b00111110,
@@ -245,7 +299,7 @@ const unsigned char NumFont[] PROGMEM = {
   // 2
   0b01110010,
   0b01001001,
-  0b01010110,
+  0b01000110,
   // 3
   0b01001001,
   0b01001001,
@@ -271,10 +325,11 @@ const unsigned char NumFont[] PROGMEM = {
   0b01001001,
   0b00110110,
   // 9
-  0b01000110,
+  0b00100110,
   0b01001001,
   0b00111110,
 };
+  #endif
 #endif
 
 extern unsigned char ColumnBuffer[];
@@ -289,6 +344,7 @@ void UpdateTime(void)
     TimeText[0] = ' ';
 #if (ScrollBeginPos>0)    
     ColumnBuffer[0] = 0;
+    ColumnBuffer[1] = 0;
 #endif    
   }
   else
@@ -296,22 +352,23 @@ void UpdateTime(void)
     hrs -= 10;
     TimeText[0] = '1';
 #if (ScrollBeginPos>0)    
-    ColumnBuffer[0] = 0b01111111;
+    ColumnBuffer[1] = 0b00000010;
+    ColumnBuffer[1] = 0b01111111;
 #endif  
   }
 #if (ScrollBeginPos>0)    
-  ColumnBuffer[1]= 0;
+  ColumnBuffer[2]= 0;
 #endif  
   
   TimeText[1] = '0' + hrs;
 #if (ScrollBeginPos>0)    
-  hrs *= 3;
+  hrs *= NumWidth;
   
-  memcpy_P(&ColumnBuffer[2], NumFont + hrs, 3);
-  ColumnBuffer[5] = 0;
-
-  ColumnBuffer[6] = 0b00110110;
+  memcpy_P(&ColumnBuffer[3], NumFont + hrs, NumWidth);
   ColumnBuffer[7] = 0;
+
+  ColumnBuffer[8] = 0b00110110;
+  ColumnBuffer[9] = 0;
 #endif  
   
   int mins = minute(tm);
@@ -320,19 +377,19 @@ void UpdateTime(void)
   
   TimeText[3] = '0' + min10;
 #if (ScrollBeginPos>0)    
-  min10 *= 3;
-  memcpy_P(&ColumnBuffer[8], NumFont + min10, 3);
-  ColumnBuffer[11] = 0;
+  min10 *= NumWidth;
+  memcpy_P(&ColumnBuffer[10], NumFont + min10, NumWidth);
+  ColumnBuffer[14] = 0;
 #endif  
   
   TimeText[4] = '0' + mins;
 #if (ScrollBeginPos>0)    
-  mins *= 3;
-  memcpy_P(&ColumnBuffer[12], NumFont + mins, 3);
-  ColumnBuffer[15] = 0;
+  mins *= NumWidth;
+  memcpy_P(&ColumnBuffer[15], NumFont + mins, NumWidth);
+  ColumnBuffer[19] = 0;
   
-  ColumnBuffer[16] = 0b00110110;
-  ColumnBuffer[17] = 0;
+  ColumnBuffer[20] = 0b00110110;
+  ColumnBuffer[21] = 0;
 #endif  
 
   int sec = second(tm);
@@ -341,16 +398,16 @@ void UpdateTime(void)
   
   TimeText[6] = '0' + sec10;
 #if (ScrollBeginPos>0)    
-  sec10 *= 3;
-  memcpy_P(&ColumnBuffer[18], NumFont + sec10, 3);
-  ColumnBuffer[21] = 0;
+  sec10 *= NumWidth;
+  memcpy_P(&ColumnBuffer[22], NumFont + sec10, NumWidth);
+  ColumnBuffer[26] = 0;
 #endif  
   
   TimeText[7] = '0' + sec;
 #if (ScrollBeginPos>0)    
-  sec *= 3;
-  memcpy_P(&ColumnBuffer[22], NumFont + sec, 3);
-  ColumnBuffer[25] = 0;
+  sec *= NumWidth;
+  memcpy_P(&ColumnBuffer[27], NumFont + sec, NumWidth);
+  ColumnBuffer[31] = 0;
 #endif  
 
   if (isAM(tm))
