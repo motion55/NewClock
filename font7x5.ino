@@ -888,7 +888,7 @@ int LoadMessage(const char *message)
 	return LoadPos;
 }
 
-int ScrollPos;
+int ScrollPos = ScrollBeginPos;
 
 void ResetScrollPos(void)
 {
