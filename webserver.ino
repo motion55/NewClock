@@ -173,7 +173,7 @@ void gpioPageHandler()
 		{
 			//digitalWrite(GPIO2, HIGH);
 			bLogo = true;
-			LoadDisplayBMP280();
+			LoadDisplayBME280();
 		}
 		else
 		{

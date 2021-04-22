@@ -6,15 +6,14 @@
 #include <avr/pgmspace.h>
 #endif
 
-#define _USE_BMP280_ 0
+#define _USE_BME280_ 1
 #define _USE_DS3231_ 0
 
 #define _DEBUG_NTP_ 1
 
-#if _USE_BMP280_
-#include <Adafruit_BMP280.h>
+#if _USE_BME280_
+#include <Adafruit_BME280.h>
 #include <Adafruit_Sensor.h>
-
 #endif
 
 #include <ESP8266WiFi.h>
@@ -25,15 +24,14 @@
 
 #include <WiFiClientSecure.h>
 
-#if _USE_BMP280_
-Adafruit_BMP280 bme; // I2C
-boolean Use_bmp280;
-String bmp280_str;
-float Temperature, Pressure;
-int T_samples, P_samples;
-float Ave_Temperature, Ave_Pressure;
-int Count = 0;
-#define AVE_SAMPLES 128
+#if _USE_BME280_
+#define DEF_BME280_ADDR 0x76
+
+Adafruit_BME280 bme; // I2C
+boolean Use_bme280;
+String BME280_str;
+float Temperature, Pressure, Humidity;
+int T_samples, P_samples, H_samples;
 #endif
 
 String sta_ssid("BST"); // your network SSID (name)
@@ -42,7 +40,7 @@ String sta_pass;        // your network password
 unsigned int localPort = 2390; // local port to listen for UDP packets
 
 const char *ntpServerName = "pool.ntp.org"; //"ntp.pagasa.dost.gov.ph";
-IPAddress timeServerIP(192, 168, 7, 1);     // IP address of
+//IPAddress timeServerIP(192, 168, 7, 1);     // IP address of
 
 const int NTP_PACKET_SIZE =
     48; // NTP time stamp is in the first 48 bytes of the message
@@ -60,7 +58,7 @@ const char *ap_password = "12345678";
 ///////////////////////////////////////////////////////////////////
 
 const int numDevices = 8; // number of MAX7219s used
-const int _SPI_CS = 15;   // D8
+const int _SPI_CS = 12;   // D6 was D8 (15)
 const int _SPI_MOSI = 13; // D7
 const int _SPI_CLK = 14;  // D5;
 
@@ -75,8 +73,8 @@ void ResetScrollPos(void);
 int LoadDisplayBuffer(int BufferLen);
 void sendNTPpacket(IPAddress &address);
 
-#if _USE_BMP280_
-void LoadDisplayBMP280(void);
+#if _USE_BME280_
+void LoadDisplayBME280(void);
 #endif
 
 // https://api.coinmarketcap.com/v2/listings/ for find the {id} of the currency
@@ -110,23 +108,26 @@ void setup(void) {
   DS3231_setup();
 #endif
 
-#if _USE_BMP280_
-  if (!bme.begin(0x76)) {
-    Serial.println("Could not find a valid BMP280 sensor, check wiring!");
-    Use_bmp280 = false;
+#if _USE_BME280_
+  if (bme.begin(DEF_BME280_ADDR)) {
+    Use_bme280 = true;
+  } else if (bme.begin()) {
+    Use_bme280 = true;
   } else {
-    for (int i = 0; i < 100 && Ave_Temperature < 20.0 && Ave_Pressure < 50000.0;
-         i++) {
-      delay(10);
-      Ave_Temperature = bme.readTemperature();
-      Ave_Pressure = bme.readPressure();
-    }
-    Temperature = Ave_Temperature * AVE_SAMPLES;
-    Pressure = Ave_Pressure * AVE_SAMPLES;
-    Count = 0;
-    Use_bmp280 = true;
+    Serial.println("Could not find a valid BMP280 sensor, check wiring!");
+    Use_bme280 = false;
+  }
+
+  if (Use_bme280) {
+    Temperature = bme.readTemperature();
+    T_samples = 1;
+    Pressure = bme.readPressure();
+    P_samples = 1;
+    Humidity = bme.readHumidity();
+    H_samples = 1;
   }
 #endif
+
   delay(3000);
 
   InitColumnBuffer();
@@ -165,6 +166,7 @@ void setup(void) {
   Serial.print(F("Local port: "));
   Serial.println(udp.localPort());
 
+  IPAddress timeServerIP(192, 168, 7, 1);
   IPAddress addr;
   if (WiFi.hostByName(ntpServerName, addr)) {
     timeServerIP = addr;
@@ -176,55 +178,60 @@ void setup(void) {
   webserver_setup();
 }
 
+#define _Scroll_Time_ 0
+
+#if _Scroll_Time_
 char TimeText[] = "00:00:00am\0";
 // 01234567890
+#endif
 
 int LogoCount = 0;
 int BufferEnd = ScrollBeginPos;
 
 void loop(void) {
   UpdateTime();
-
+#if 1
   if (LoadDisplayBuffer(BufferEnd) == ScrollBeginPos) {
+ #if _Scroll_Time_
     String Timestr(TimeText);
     Timestr += " ";
     Timestr += GetDateStr();
-
+ #else
+    String Timestr(GetDateStr());
+ #endif
     if (LogoOn()) {
       LogoCount++;
       if (LogoCount > 5) {
         LogoCount = 0;
         SetLogo(false);
-      } else if (LogoCount == 3) {
+      } else if ((LogoCount == 1)||(LogoCount == 3)||(LogoCount == 5)) {
         SetLogo(false);
-#if _USE_BMP280_
-        LoadDisplayBMP280();
-        Timestr += " ";
-        Timestr += bmp280_str;
-#endif
       } else {
       }
     } else {
       SetLogo(true);
-      InitMax7219();
-      return;
     }
-    BufferEnd = LoadMessage(Timestr.c_str());
-  } else {
-#if _USE_BMP280_
-    if (Use_bmp280) {
-      Ave_Temperature = Temperature / AVE_SAMPLES;
-      Temperature -= Ave_Temperature;
-      Temperature += bme.readTemperature();
-
-      Ave_Pressure = Pressure / AVE_SAMPLES;
-      Pressure -= Ave_Pressure;
-      Pressure += bme.readPressure();
-    }
+#if _USE_BME280_
+    LoadDisplayBME280();
+    Timestr += " ";
+    Timestr += BME280_str;
 #endif
+    BufferEnd = LoadMessage(Timestr.c_str());
+    Serial.println(Timestr);
+  } else {
+#if _USE_BME280_
+    Temperature += bme.readTemperature();
+    T_samples++;
+    Pressure += bme.readPressure();
+    P_samples++;
+    Humidity += bme.readHumidity();
+    H_samples++;
+#endif
+#if _Scroll_Time_
     ReloadMessage(ScrollBeginPos, TimeText);
+#endif    
   }
-
+#endif
   //CheckBitCoin();
 
   webserver_loop();
@@ -353,7 +360,9 @@ void UpdateTime(void) {
 
   int hrs = hourFormat12(tm);
   if (hrs < 10) {
+#if _Scroll_Time_
     TimeText[0] = ' ';
+#endif
 #if (ScrollBeginPos > 0)
     ColumnBuffer[0] = 0;
     ColumnBuffer[1] = 0;
@@ -361,7 +370,9 @@ void UpdateTime(void) {
 #endif
   } else {
     hrs -= 10;
+#if _Scroll_Time_
     TimeText[0] = '1';
+#endif
 #if (ScrollBeginPos > 0)
     ColumnBuffer[0] = 0b01000010;
     ColumnBuffer[1] = 0b01111111;
@@ -369,7 +380,9 @@ void UpdateTime(void) {
 #endif
   }
 
+#if _Scroll_Time_
   TimeText[1] = '0' + hrs;
+#endif
 #if (ScrollBeginPos > 0)
   hrs *= NumWidth;
 
@@ -384,14 +397,18 @@ void UpdateTime(void) {
   int min10 = mins / 10;
   mins = mins % 10;
 
+#if _Scroll_Time_
   TimeText[3] = '0' + min10;
+#endif
 #if (ScrollBeginPos > 0)
   min10 *= NumWidth;
   memcpy_P(&ColumnBuffer[10], NumFont + min10, NumWidth);
   ColumnBuffer[14] = 0;
 #endif
 
+#if _Scroll_Time_
   TimeText[4] = '0' + mins;
+#endif
 #if (ScrollBeginPos > 0)
   mins *= NumWidth;
   memcpy_P(&ColumnBuffer[15], NumFont + mins, NumWidth);
@@ -405,20 +422,24 @@ void UpdateTime(void) {
   int sec10 = sec / 10;
   sec = sec % 10;
 
+#if _Scroll_Time_
   TimeText[6] = '0' + sec10;
+#endif
 #if (ScrollBeginPos > 0)
   sec10 *= NumWidth;
   memcpy_P(&ColumnBuffer[22], NumFont + sec10, NumWidth);
   ColumnBuffer[26] = 0;
 #endif
 
+#if _Scroll_Time_
   TimeText[7] = '0' + sec;
+#endif
 #if (ScrollBeginPos > 0)
   sec *= NumWidth;
   memcpy_P(&ColumnBuffer[27], NumFont + sec, NumWidth);
   ColumnBuffer[31] = 0;
 #endif
-
+#if _Scroll_Time_
   if (isAM(tm)) {
     TimeText[8] = 'a';
     TimeText[9] = 'm';
@@ -426,6 +447,7 @@ void UpdateTime(void) {
     TimeText[8] = 'p';
     TimeText[9] = 'm';
   }
+#endif
 }
 
 const int timeZone = 8 * SECS_PER_HOUR; // PHT
@@ -464,6 +486,7 @@ void sendNTPpacket(IPAddress &address) {
 }
 
 time_t getNtpTime() {
+  IPAddress timeServerIP(192, 168, 7, 1);
   IPAddress addr;
   if (WiFi.hostByName(ntpServerName, addr)) {
     timeServerIP = addr;
@@ -512,11 +535,11 @@ void my_delay_ms(int msec) {
         time_t tm = secsSince1900 - 2208988800UL + timeZone;
 
         if ((endWait > 3600000L) || first_hour) {
-          setSyncInterval(3600); // Update after 1 hour.
+          setSyncInterval(4000); // Update after 1 hour.
           first_hour = 1;
   #ifdef _DEBUG_NTP_
         } else {
-          setSyncInterval(60); // Update after 60 for the 1st hourt.
+          setSyncInterval(600); // Update after 60 for the 1st hourt.
   #endif
         }
       
@@ -532,28 +555,45 @@ void my_delay_ms(int msec) {
   }
 }
 
-void LoadDisplayBMP280(void) {
-#if _USE_BMP280_
-  if (Use_bmp280) {
+void LoadDisplayBME280(void) {
+#if _USE_BME280_
+  //String sampleStr = " ";
+  if (Use_bme280) {
     if (T_samples > 0) {
-      bmp280_str = String(Temperature / T_samples, 1);
-    } else {
-      bmp280_str = String(bme.readTemperature(), 1);
+      BME280_str = String(Temperature / T_samples, 1);
     }
+    else {
+      BME280_str = String(bme.readTemperature(), 1);
+    }
+    //sampleStr += String(T_samples) + " ";
     Temperature = 0.0f;
     T_samples = 0;
-    bmp280_str += String("C ");
-    if (P_samples > 0) {
-      bmp280_str += String(Pressure / (P_samples * 100), 2);
+    BME280_str += String("C ");
+
+    if (H_samples > 0) {
+      BME280_str += String(Humidity / H_samples, 1);
     } else {
-      bmp280_str += String(bme.readPressure() / 100.0, 2);
+      BME280_str += String(bme.readHumidity(), 1);
     }
+    //sampleStr += String(H_samples) + " ";
+    Humidity = 0.0f;
+    H_samples = 0;
+    BME280_str += String("% ");
+
+    if (P_samples > 0) {
+      BME280_str += String(Pressure / (P_samples * 100), 2);
+    } else {
+      BME280_str += String(bme.readPressure() / 100.0, 2);
+    }
+    //sampleStr += String(P_samples) + " ";
     Pressure = 0.0f;
     P_samples = 0;
-    bmp280_str += String("hPa ");
+    BME280_str += String("hPa ");
   } else {
-    bmp280_str = String(" No BMP280 detected! ");
+    BME280_str = String(" No BME280 detected! ");
   }
+  //Serial.print(sampleStr);
+  //Serial.println(BME280_str);
 #endif
 }
 
