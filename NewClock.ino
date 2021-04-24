@@ -152,8 +152,8 @@ void setup(void) {
 
   InitColumnBuffer();
   ResetScrollPos();
-  ConnectStr = "Connected!";
-  BufferEnd = LoadMessage(ConnectStr.c_str());
+  String ConnectedStr("Connected! ");
+  BufferEnd = LoadMessage(ConnectedStr.c_str());
 
   Serial.println(F("Starting UDP"));
   udp.begin(localPort);
@@ -206,7 +206,7 @@ void loop(void) {
     }
 #if _USE_BME280_
     LoadDisplayBME280();
-    Timestr += " ";
+    //Timestr += " ";
     Timestr += BME280_str;
 #endif
     BufferEnd = LoadMessage(Timestr.c_str());
@@ -576,6 +576,8 @@ void LoadDisplayBME280(void) {
     // sampleStr += String(T_samples) + " ";
     Temperature = 0.0f;
     T_samples = 0;
+    char degree = 0x7F;
+    BME280_str += String(degree);
     BME280_str += String("C ");
 
     if (H_samples > 0) {

@@ -757,10 +757,9 @@ const unsigned char font7x5[] PROGMEM = {
     0b00001000,
     0b00000000,
     //  offset = 521
-    0b00000110,
-    0b00001001,
-    0b00001001,
-    0b00000110,
+    0b00000010,
+    0b00000101,
+    0b00000010,
     0b00000000,
 };
 
@@ -768,7 +767,7 @@ const char font7x5_kern[] PROGMEM = {
     6, 2, 4, 6, 6, 6, 6, 3, 4, 4, 6, 6, 3, 6, 3, 6, 6, 6, 6, 6, 6, 6, 6, 6,
     6, 6, 3, 3, 5, 6, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 6, 6, 6, 6, 6, 6,
     6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 6, 4, 6, 6, 4, 6, 6, 6, 6, 6, 6, 6,
-    6, 4, 5, 5, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 2, 4, 6, 5,
+    6, 4, 5, 5, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 2, 4, 6, 4,
 };
 
 const int font7x5_offset[] = {
@@ -863,7 +862,9 @@ int LoadMessage(const char *message) {
 
 int ScrollPos = ScrollBeginPos;
 
-void ResetScrollPos(void) { ScrollPos = 0; }
+void ResetScrollPos(void) { 
+  ScrollPos = ScrollBeginPos; 
+}
 
 int LoadDisplayBuffer(int BufferLen) {
   unsigned char mask = 0x01;
