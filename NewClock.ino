@@ -40,7 +40,7 @@ String sta_pass;        // your network password
 unsigned int localPort = 2390; // local port to listen for UDP packets
 
 const char *ntpServerName = "pool.ntp.org"; //"ntp.pagasa.dost.gov.ph";
-//IPAddress timeServerIP(192, 168, 7, 1);     // IP address of
+// IPAddress timeServerIP(192, 168, 7, 1);     // IP address of
 
 const int NTP_PACKET_SIZE =
     48; // NTP time stamp is in the first 48 bytes of the message
@@ -65,6 +65,7 @@ const int _SPI_CLK = 14;  // D5;
 #define ScrollBeginPos 32
 
 extern int LoadPos;
+int BufferEnd = ScrollBeginPos;
 
 void InitMax7219();
 void UpdateTime(void);
@@ -128,28 +129,15 @@ void setup(void) {
   }
 #endif
 
-  delay(3000);
-
-  InitColumnBuffer();
-  LoadDisplayBuffer(ScrollBeginPos);
-
-  String ConnectStr("Connecting... ");
-  ResetScrollPos();
-  int Len = LoadMessage(ConnectStr.c_str());
-  for (int i = 0; i < 200; i++) {
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.println(F("WiFi connected"));
-      Serial.println(F("IP address: "));
-      Serial.println(WiFi.localIP());
-      break;
-    }
-    LoadDisplayBuffer(LoadPos);
-    delay(50);
-  }
-
   InitMax7219();
 
+  // delay(1000);
+
+  InitColumnBuffer();
   ResetScrollPos();
+
+  String ConnectStr("Connecting... ");
+  BufferEnd = LoadMessage(ConnectStr.c_str());
 
   for (int i = 0; i < 400; i++) {
     if (WiFi.status() == WL_CONNECTED) {
@@ -158,8 +146,14 @@ void setup(void) {
       Serial.println(WiFi.localIP());
       break;
     }
+    LoadDisplayBuffer(BufferEnd);
     delay(50);
   }
+
+  InitColumnBuffer();
+  ResetScrollPos();
+  ConnectStr = "Connected!";
+  BufferEnd = LoadMessage(ConnectStr.c_str());
 
   Serial.println(F("Starting UDP"));
   udp.begin(localPort);
@@ -186,25 +180,24 @@ char TimeText[] = "00:00:00am\0";
 #endif
 
 int LogoCount = 0;
-int BufferEnd = ScrollBeginPos;
 
 void loop(void) {
   UpdateTime();
-#if 1
+
   if (LoadDisplayBuffer(BufferEnd) == ScrollBeginPos) {
- #if _Scroll_Time_
+#if _Scroll_Time_
     String Timestr(TimeText);
     Timestr += " ";
     Timestr += GetDateStr();
- #else
+#else
     String Timestr(GetDateStr());
- #endif
+#endif
     if (LogoOn()) {
       LogoCount++;
       if (LogoCount > 5) {
         LogoCount = 0;
         SetLogo(false);
-      } else if ((LogoCount == 1)||(LogoCount == 3)||(LogoCount == 5)) {
+      } else if ((LogoCount == 1) || (LogoCount == 3) || (LogoCount == 5)) {
         SetLogo(false);
       } else {
       }
@@ -229,10 +222,10 @@ void loop(void) {
 #endif
 #if _Scroll_Time_
     ReloadMessage(ScrollBeginPos, TimeText);
-#endif    
-  }
 #endif
-  //CheckBitCoin();
+  }
+
+  // CheckBitCoin();
 
   webserver_loop();
 
@@ -321,7 +314,7 @@ const unsigned char NumFont[] PROGMEM = {
     0b01001001,
     0b01000110,
     // 3
-//    0b01001001,
+    //    0b01001001,
     0b00100010,
     0b01001001,
     0b00110110,
@@ -357,6 +350,7 @@ extern unsigned char ColumnBuffer[];
 
 void UpdateTime(void) {
   time_t tm = now();
+  uint8_t ofs = 0;
 
   int hrs = hourFormat12(tm);
   if (hrs < 10) {
@@ -364,10 +358,24 @@ void UpdateTime(void) {
     TimeText[0] = ' ';
 #endif
 #if (ScrollBeginPos > 0)
-    ColumnBuffer[0] = 0;
-    ColumnBuffer[1] = 0;
-    ColumnBuffer[2] = 0;
-    ColumnBuffer[3] = 0;
+    if (hrs < 4) {
+      ColumnBuffer[0] = 0;
+      ColumnBuffer[29] = 0;
+      ColumnBuffer[30] = 0;
+      ColumnBuffer[31] = 0;
+    } else if (hrs < 7) {
+      ColumnBuffer[0] = 0;
+      ColumnBuffer[1] = 0;
+      ColumnBuffer[30] = 0;
+      ColumnBuffer[31] = 0;
+      ofs = 1;
+    } else {
+      ColumnBuffer[0] = 0;
+      ColumnBuffer[1] = 0;
+      ColumnBuffer[2] = 0;
+      ColumnBuffer[31] = 0;
+      ofs = 2;
+    }
 #endif
   } else {
     hrs -= 10;
@@ -379,6 +387,7 @@ void UpdateTime(void) {
     ColumnBuffer[1] = 0b01111111;
     ColumnBuffer[2] = 0b01000000;
     ColumnBuffer[3] = 0;
+    ofs = 3;
 #endif
   }
 
@@ -388,11 +397,11 @@ void UpdateTime(void) {
 #if (ScrollBeginPos > 0)
   hrs *= NumWidth;
 
-  memcpy_P(&ColumnBuffer[4], NumFont + hrs, NumWidth);
-  ColumnBuffer[8] = 0;
+  memcpy_P(&ColumnBuffer[1 + ofs], NumFont + hrs, NumWidth);
+  ColumnBuffer[5 + ofs] = 0;
 
-  ColumnBuffer[9] = 0b00110110;
-  ColumnBuffer[10] = 0;
+  ColumnBuffer[6 + ofs] = 0b00110110;
+  ColumnBuffer[7 + ofs] = 0;
 #endif
 
   int mins = minute(tm);
@@ -404,8 +413,8 @@ void UpdateTime(void) {
 #endif
 #if (ScrollBeginPos > 0)
   min10 *= NumWidth;
-  memcpy_P(&ColumnBuffer[11], NumFont + min10, NumWidth);
-  ColumnBuffer[15] = 0;
+  memcpy_P(&ColumnBuffer[8 + ofs], NumFont + min10, NumWidth);
+  ColumnBuffer[12 + ofs] = 0;
 #endif
 
 #if _Scroll_Time_
@@ -413,11 +422,11 @@ void UpdateTime(void) {
 #endif
 #if (ScrollBeginPos > 0)
   mins *= NumWidth;
-  memcpy_P(&ColumnBuffer[16], NumFont + mins, NumWidth);
-  ColumnBuffer[20] = 0;
+  memcpy_P(&ColumnBuffer[13 + ofs], NumFont + mins, NumWidth);
+  ColumnBuffer[17 + ofs] = 0;
 
-  ColumnBuffer[21] = 0b00110110;
-  ColumnBuffer[22] = 0;
+  ColumnBuffer[18 + ofs] = 0b00110110;
+  ColumnBuffer[19 + ofs] = 0;
 #endif
 
   int sec = second(tm);
@@ -429,8 +438,8 @@ void UpdateTime(void) {
 #endif
 #if (ScrollBeginPos > 0)
   sec10 *= NumWidth;
-  memcpy_P(&ColumnBuffer[23], NumFont + sec10, NumWidth);
-  ColumnBuffer[27] = 0;
+  memcpy_P(&ColumnBuffer[20 + ofs], NumFont + sec10, NumWidth);
+  ColumnBuffer[24 + ofs] = 0;
 #endif
 
 #if _Scroll_Time_
@@ -438,7 +447,7 @@ void UpdateTime(void) {
 #endif
 #if (ScrollBeginPos > 0)
   sec *= NumWidth;
-  memcpy_P(&ColumnBuffer[28], NumFont + sec, NumWidth);
+  memcpy_P(&ColumnBuffer[25 + ofs], NumFont + sec, NumWidth);
 #endif
 #if _Scroll_Time_
   if (isAM(tm)) {
@@ -511,7 +520,8 @@ void my_delay_ms(int msec) {
 
       if (size >= NTP_PACKET_SIZE) {
         Serial.println(F("Receive NTP Response"));
-        udp.read(packetBuffer, NTP_PACKET_SIZE); // read packet into the buffer
+        udp.read(packetBuffer,
+                 NTP_PACKET_SIZE); // read packet into the buffer
         unsigned long secsSince1900;
         // convert four bytes starting at location 40 to a long integer
         secsSince1900 = (unsigned long)packetBuffer[40] << 24;
@@ -541,7 +551,7 @@ void my_delay_ms(int msec) {
         } else {
           setSyncInterval(600); // Update after 60 for the 1st hourt.
         }
-      
+
         setTime(tm);
 #if _USE_DS3231_
         DS3231_setTime(tm);
@@ -556,15 +566,14 @@ void my_delay_ms(int msec) {
 
 void LoadDisplayBME280(void) {
 #if _USE_BME280_
-  //String sampleStr = " ";
+  // String sampleStr = " ";
   if (Use_bme280) {
     if (T_samples > 0) {
       BME280_str = String(Temperature / T_samples, 1);
-    }
-    else {
+    } else {
       BME280_str = String(bme.readTemperature(), 1);
     }
-    //sampleStr += String(T_samples) + " ";
+    // sampleStr += String(T_samples) + " ";
     Temperature = 0.0f;
     T_samples = 0;
     BME280_str += String("C ");
@@ -574,7 +583,7 @@ void LoadDisplayBME280(void) {
     } else {
       BME280_str += String(bme.readHumidity(), 1);
     }
-    //sampleStr += String(H_samples) + " ";
+    // sampleStr += String(H_samples) + " ";
     Humidity = 0.0f;
     H_samples = 0;
     BME280_str += String("% ");
@@ -584,15 +593,15 @@ void LoadDisplayBME280(void) {
     } else {
       BME280_str += String(bme.readPressure() / 100.0, 2);
     }
-    //sampleStr += String(P_samples) + " ";
+    // sampleStr += String(P_samples) + " ";
     Pressure = 0.0f;
     P_samples = 0;
     BME280_str += String("hPa ");
   } else {
     BME280_str = String(" No BME280 detected! ");
   }
-  //Serial.print(sampleStr);
-  //Serial.println(BME280_str);
+  // Serial.print(sampleStr);
+  // Serial.println(BME280_str);
 #endif
 }
 
@@ -616,13 +625,15 @@ void CheckBitCoin() {
       Serial.print(">>> Connecting to ");
       Serial.println(host);
 
-      if (client) delete client;
+      if (client)
+        delete client;
       client = new WiFiClientSecure;
-      if (client ==NULL) return;
+      if (client == NULL)
+        return;
 
       if (!client->connect(host, httpsPort)) {
         Serial.println(" Connection failed");
-        //return;
+        // return;
       }
       Serial.print("Requesting URL: ");
       Serial.println("Connected to server!");
@@ -648,7 +659,7 @@ void CheckBitCoin() {
         client->stop();
         delete client;
         client = NULL;
-        
+
         Request = false;
 
         data.replace('[', ' ');
@@ -661,7 +672,7 @@ void CheckBitCoin() {
         const size_t bufferSize = JSON_OBJECT_SIZE(21) + 400;
         DynamicJsonDocument jsonDoc(bufferSize);
 
-        //JsonObject &root = jsonDoc.parseObject(buffer);
+        // JsonObject &root = jsonDoc.parseObject(buffer);
         auto err = deserializeJson(jsonDoc, buffer);
         if (err) {
           Serial.print(F("deserializeJson() failed with code "));
@@ -679,7 +690,7 @@ void CheckBitCoin() {
         String last_updated =
             data0["last_updated"];    // "1472762067" <-- Unix Time Stamp
         String error = root["error"]; // id not found
-#endif        
+#endif
       }
     } else {
       Serial.println(" Request Timeout!");
