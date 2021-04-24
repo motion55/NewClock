@@ -367,6 +367,7 @@ void UpdateTime(void) {
     ColumnBuffer[0] = 0;
     ColumnBuffer[1] = 0;
     ColumnBuffer[2] = 0;
+    ColumnBuffer[3] = 0;
 #endif
   } else {
     hrs -= 10;
@@ -377,6 +378,7 @@ void UpdateTime(void) {
     ColumnBuffer[0] = 0b01000010;
     ColumnBuffer[1] = 0b01111111;
     ColumnBuffer[2] = 0b01000000;
+    ColumnBuffer[3] = 0;
 #endif
   }
 
@@ -386,11 +388,11 @@ void UpdateTime(void) {
 #if (ScrollBeginPos > 0)
   hrs *= NumWidth;
 
-  memcpy_P(&ColumnBuffer[3], NumFont + hrs, NumWidth);
-  ColumnBuffer[7] = 0;
+  memcpy_P(&ColumnBuffer[4], NumFont + hrs, NumWidth);
+  ColumnBuffer[8] = 0;
 
-  ColumnBuffer[8] = 0b00110110;
-  ColumnBuffer[9] = 0;
+  ColumnBuffer[9] = 0b00110110;
+  ColumnBuffer[10] = 0;
 #endif
 
   int mins = minute(tm);
@@ -402,8 +404,8 @@ void UpdateTime(void) {
 #endif
 #if (ScrollBeginPos > 0)
   min10 *= NumWidth;
-  memcpy_P(&ColumnBuffer[10], NumFont + min10, NumWidth);
-  ColumnBuffer[14] = 0;
+  memcpy_P(&ColumnBuffer[11], NumFont + min10, NumWidth);
+  ColumnBuffer[15] = 0;
 #endif
 
 #if _Scroll_Time_
@@ -411,11 +413,11 @@ void UpdateTime(void) {
 #endif
 #if (ScrollBeginPos > 0)
   mins *= NumWidth;
-  memcpy_P(&ColumnBuffer[15], NumFont + mins, NumWidth);
-  ColumnBuffer[19] = 0;
+  memcpy_P(&ColumnBuffer[16], NumFont + mins, NumWidth);
+  ColumnBuffer[20] = 0;
 
-  ColumnBuffer[20] = 0b00110110;
-  ColumnBuffer[21] = 0;
+  ColumnBuffer[21] = 0b00110110;
+  ColumnBuffer[22] = 0;
 #endif
 
   int sec = second(tm);
@@ -427,8 +429,8 @@ void UpdateTime(void) {
 #endif
 #if (ScrollBeginPos > 0)
   sec10 *= NumWidth;
-  memcpy_P(&ColumnBuffer[22], NumFont + sec10, NumWidth);
-  ColumnBuffer[26] = 0;
+  memcpy_P(&ColumnBuffer[23], NumFont + sec10, NumWidth);
+  ColumnBuffer[27] = 0;
 #endif
 
 #if _Scroll_Time_
@@ -436,8 +438,7 @@ void UpdateTime(void) {
 #endif
 #if (ScrollBeginPos > 0)
   sec *= NumWidth;
-  memcpy_P(&ColumnBuffer[27], NumFont + sec, NumWidth);
-  ColumnBuffer[31] = 0;
+  memcpy_P(&ColumnBuffer[28], NumFont + sec, NumWidth);
 #endif
 #if _Scroll_Time_
   if (isAM(tm)) {
@@ -537,10 +538,8 @@ void my_delay_ms(int msec) {
         if ((endWait > 3600000L) || first_hour) {
           setSyncInterval(4000); // Update after 1 hour.
           first_hour = 1;
-  #ifdef _DEBUG_NTP_
         } else {
           setSyncInterval(600); // Update after 60 for the 1st hourt.
-  #endif
         }
       
         setTime(tm);
